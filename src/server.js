@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const app = express();
 const admin = require('../config/firebase');
+const MyAdminRoutes = require('../routes/MyAdminRoutes');
 
 const PORT = 5000;
 
@@ -23,6 +24,8 @@ app.get('/test-firebase', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+app.use('/admin/', MyAdminRoutes);
 
 app.listen((PORT),() => {
     console.log('Server is running at Port: ' + PORT);

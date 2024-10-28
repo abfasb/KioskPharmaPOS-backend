@@ -6,7 +6,9 @@ dotenv.config();
 
 admin.initializeApp({
     credential: admin.credential.applicationDefault(), 
-    databaseURL: process.env.VITE_APP_FIREBASE_DATABASE_URL
+    databaseURL: process.env.VITE_APP_FIREBASE_DATABASE_URL,
+    storageBucket: process.env.VITE_APP_FIREBASE_STORAGE_BUCKET
   });
+
 
 module.exports = admin
