@@ -10,3 +10,4 @@ const upload = multer({
 router.post('/add-product', upload.single('image'), addProduct)
 
 module.exports = router;
+

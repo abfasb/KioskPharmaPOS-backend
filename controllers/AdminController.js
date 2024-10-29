@@ -6,7 +6,7 @@ const bucket = admin.storage().bucket();
 
 const addProduct = async (req, res) => {
   try {
-    const { name, price, description, stockLevel, prescriptionNeeded, purposes } = req.body;
+    const { name, price, description, stockLevel, prescriptionNeeded, purposes, dosages, category } = req.body;
 
     if (!name || !price || !description || !stockLevel || !prescriptionNeeded) {
       return res.status(400).json({ message: 'All fields are required' });
@@ -20,7 +20,7 @@ const addProduct = async (req, res) => {
         metadata: { contentType: req.file.mimetype },
       });
       const signedUrls = await file.getSignedUrl({ action: 'read', expires: '03-01-2500' }); 
-      imageUrl = signedUrls[0]; // Set public URL for the image
+      imageUrl = signedUrls[0];
     }
 
     const newProduct = {
@@ -30,7 +30,9 @@ const addProduct = async (req, res) => {
       stockLevel: parseInt(stockLevel),
       prescriptionNeeded: prescriptionNeeded === 'yes',
       purposes: Array.isArray(purposes) ? purposes : [],
-      imageUrl: imageUrl, // Store the public URL in Firestore
+      dosages: Array.isArray(dosages) ? dosages : [],
+      imageUrl: imageUrl,
+      category,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
@@ -45,5 +47,6 @@ const addProduct = async (req, res) => {
     res.status(500).json({ message: 'Failed to add product', error });
   }
 };
+
 
 module.exports = addProduct;
