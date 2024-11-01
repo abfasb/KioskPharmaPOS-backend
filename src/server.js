@@ -4,6 +4,7 @@ const cors = require('cors');
 const app = express();
 const admin = require('../config/firebase');
 const MyAdminRoutes = require('../routes/MyAdminRoutes');
+const MyUserRoutes = require('../routes/MyUserRoutes');
 
 const PORT = 5000;
 
@@ -26,6 +27,7 @@ app.get('/test-firebase', async (req, res) => {
 });
 
 app.use('/admin/', MyAdminRoutes);
+app.use('/user/', MyUserRoutes);
 
 app.listen((PORT),() => {
     console.log('Server is running at Port: ' + PORT);

@@ -49,4 +49,57 @@ const addProduct = async (req, res) => {
 };
 
 
+
+/*
+// Transaction endpoint
+const processTransaction = async (req, res) => {
+  const { products, paymentMethod, discountCode } = req.body;
+
+  try {
+    // Fetch product data and update inventory
+    const transactionTotal = await processTransaction(products, discountCode);
+
+    // Save transaction to Firestore
+    const transactionRef = await db.collection("transactions").add({
+      products,
+      totalAmount: transactionTotal,
+      paymentMethod,
+      createdAt: new Date(),
+    });
+
+    res.status(200).json({ success: true, transactionId: transactionRef.id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+async function processTransaction(products, discountCode) {
+  let totalAmount = 0;
+
+  for (const product of products) {
+    const productRef = db.collection("products").doc(product.id);
+    const productData = (await productRef.get()).data();
+    if (productData.stock < product.quantity) throw new Error("Insufficient stock");
+
+    await productRef.update({
+      stock: productData.stock - product.quantity,
+    });
+
+    totalAmount += productData.price * product.quantity;
+  }
+
+  if (discountCode) {
+    const discountRef = await db.collection("discounts").doc(discountCode).get();
+    if (discountRef.exists) {
+      const discount = discountRef.data();
+      totalAmount -= discount.discountValue;
+    }
+  }
+
+  return totalAmount;
+}
+
+*/
+
+
 module.exports = addProduct;
