@@ -88,4 +88,70 @@ const validatePrescription = async (req, res) => {
     }
   };
 
-module.exports = { addToCart, getUserCart, validatePrescription };
+const viewProductToCart = async (req, res) => {
+    const { productId, userId, imageUrl, name, price, quantity, dosage } = req.body;
+
+    // Validate input
+    if (!productId || !userId || !imageUrl || !name || !price || !quantity) {
+        return res.status(400).send('Missing required fields');
+    }
+
+    // Prepare the cart item data
+    const cartItem = {
+        productId,
+        userId,
+        imageUrl,
+        name,
+        price,
+        quantity,
+        dosage: dosage || null // Optional field, default to null if not provided
+    };
+
+    try {
+        // Add to user's cart in Firestore
+        await db.collection('carts').doc(userId).set({
+            items: admin.firestore.FieldValue.arrayUnion(cartItem)
+        }, { merge: true });
+
+        return res.status(201).send('Item added to cart successfully');
+    } catch (error) {
+        console.error('Error adding item to cart: ', error);
+        return res.status(500).send('Internal Server Error');
+    }
+}
+
+const removeProductFromCart = async (req, res) => {
+    const { userId, productId } = req.body;
+
+    if (!userId || !productId) {
+        return res.status(400).send('Missing required fields');
+    }
+
+    try {
+        const userCartRef = db.collection('carts').doc(userId);
+        const userCartDoc = await userCartRef.get();
+
+        if (!userCartDoc.exists) {
+            return res.status(404).send('User cart not found');
+        }
+
+        const cartItems = userCartDoc.data().items || [];
+        const itemToRemove = cartItems.find(item => item.productId === productId);
+
+        if (!itemToRemove) {
+            return res.status(404).send('Item not found in cart');
+        }
+
+        await userCartRef.update({
+            items: admin.firestore.FieldValue.arrayRemove(itemToRemove)
+        });
+
+        return res.status(200).send('Item removed from cart successfully');
+    } catch (error) {
+        console.error('Error removing item from cart:', error);
+        return res.status(500).send('Internal Server Error');
+    }
+};
+
+
+module.exports = { addToCart, getUserCart, validatePrescription, viewProductToCart, removeProductFromCart };
