@@ -91,12 +91,10 @@ const validatePrescription = async (req, res) => {
 const viewProductToCart = async (req, res) => {
     const { productId, userId, imageUrl, name, price, quantity, dosage } = req.body;
 
-    // Validate input
     if (!productId || !userId || !imageUrl || !name || !price || !quantity) {
         return res.status(400).send('Missing required fields');
     }
 
-    // Prepare the cart item data
     const cartItem = {
         productId,
         userId,
@@ -104,11 +102,10 @@ const viewProductToCart = async (req, res) => {
         name,
         price,
         quantity,
-        dosage: dosage || null // Optional field, default to null if not provided
+        dosage: dosage || null
     };
 
     try {
-        // Add to user's cart in Firestore
         await db.collection('carts').doc(userId).set({
             items: admin.firestore.FieldValue.arrayUnion(cartItem)
         }, { merge: true });
