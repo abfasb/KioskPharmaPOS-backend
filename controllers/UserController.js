@@ -4,7 +4,7 @@ const db = admin.firestore();
 
 const addToCart = async (req, res) => {
     console.log("Request body:", req.body);
-    const { userId, productId, name, price, imageUrl, quantity = 1 } = req.body;
+    const { userId, productId, name, price, imageUrl, quantity = 1, dosage = null } = req.body;
 
     try {
         const cartRef = db.collection("carts").doc(userId);
@@ -28,7 +28,7 @@ const addToCart = async (req, res) => {
             if (existingProductIndex > -1) {
                 cartData.items[existingProductIndex].quantity += quantity;
             } else {
-                const newItem = { productId, name, price, imageUrl, quantity };
+                const newItem = { productId, name, price, imageUrl, quantity, dosage };
                 cartData.items.push(newItem);
             }
             
@@ -66,4 +66,26 @@ const getUserCart = async (req, res) => {
 
 
 
-module.exports = { addToCart, getUserCart };
+const validatePrescription = async (req, res) => {
+    const { text } = req.body;
+  
+    try {
+      // Assuming your products are stored in a collection called 'products'
+      const productsRef = db.collection('products');
+      const snapshot = await productsRef.where('name', '==', text).get();
+  
+      if (!snapshot.empty) {
+        // If there is a matching product, return success
+        const productData = snapshot.docs[0].data();
+        res.json({ success: true, message: 'Product is valid for prescription.', product: productData });
+      } else {
+        // No matching product found
+        res.json({ success: false, message: 'Product not found.' });
+      }
+    } catch (error) {
+      console.error('Error validating product:', error);
+      res.status(500).json({ success: false, message: 'Validation failed.' });
+    }
+  };
+
+module.exports = { addToCart, getUserCart, validatePrescription };
