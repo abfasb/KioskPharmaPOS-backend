@@ -1,4 +1,6 @@
 const admin = require('../config/firebase');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
 
 const db = admin.firestore();
 
@@ -151,4 +153,37 @@ const removeProductFromCart = async (req, res) => {
 };
 
 
-module.exports = { addToCart, getUserCart, validatePrescription, viewProductToCart, removeProductFromCart };
+const integrateStripe = async (req, res) => {
+    const { items } = req.body; // Expecting the items in the request body
+  
+    // Create line items from the received items
+    const lineItems = items.map(item => ({
+      price_data: {
+        currency: 'php',
+        product_data: {
+          name: item.name,
+          images: [item.imageUrl],
+        },
+        unit_amount: item.price * 100, // amount in cents
+      },
+      quantity: item.quantity,
+    }));
+  
+    try {
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'], // or other payment methods
+        line_items: lineItems,
+        mode: 'payment',
+        success_url: 'http://localhost:3000/success', // Change this to your success URL
+        cancel_url: 'http://localhost:3000/cancel', // Change this to your cancel URL
+      });
+  
+      res.json({ id: session.id });
+    } catch (error) {
+      console.error('Error creating Checkout Session:', error);
+      res.status(500).send('Internal Server Error');
+    }
+  }
+
+
+module.exports = { addToCart, getUserCart, validatePrescription, viewProductToCart, removeProductFromCart, integrateStripe };
