@@ -1,7 +1,6 @@
 const admin = require('../config/firebase');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-
 const db = admin.firestore();
 
 const addToCart = async (req, res) => {
@@ -153,37 +152,64 @@ const removeProductFromCart = async (req, res) => {
 };
 
 
+
 const integrateStripe = async (req, res) => {
-    const { items } = req.body; // Expecting the items in the request body
-  
-    // Create line items from the received items
-    const lineItems = items.map(item => ({
-      price_data: {
-        currency: 'php',
-        product_data: {
-          name: item.name,
-          images: [item.imageUrl],
-        },
-        unit_amount: item.price * 100, // amount in cents
-      },
-      quantity: item.quantity,
-    }));
-  
     try {
+      const { items, userId, paymentMethod, orderId, taxRate, discountAmount } = req.body;
+  
+      // Calculate total amount in cents
+      const totalAmount = items.reduce((acc, item) => (((acc + item.price * item.quantity) - discountAmount) - taxRate) * 100, 0);
+  
+      if (totalAmount < 3000) {
+        return res.status(400).json({ error: "The minimum order amount is PHP 30. Consider using cash instead. Thank you!" });
+      }
+  
+      // Prepare transaction data with full structure
+      const transactionData = {
+        userId,
+        orderId,
+        paymentMethod,
+        items,
+        taxRate,
+        discountAmount,
+        total: totalAmount / 100,  // Convert back to PHP
+        timestamp: admin.firestore.Timestamp.now(),
+        checkoutStatus: "processing",
+      };
+  
+      // Store transaction data in Firestore
+      await db.collection("transactions").doc(orderId).set(transactionData);
+  
+      // Format items for Stripe Checkout
+      const lineItems = items.map((item) => ({
+        price_data: {
+          currency: "php",
+          product_data: { name: item.name, description: item.description },
+          unit_amount: item.price * 100,
+        },
+        quantity: item.quantity,
+      }));
+  
+      // Create Stripe session with a success URL that includes orderId
       const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'], // or other payment methods
+        payment_method_types: ["card"],
         line_items: lineItems,
-        mode: 'payment',
-        success_url: 'http://localhost:3000/success', // Change this to your success URL
-        cancel_url: 'http://localhost:3000/cancel', // Change this to your cancel URL
+        mode: "payment",
+        success_url: `http://localhost:5173/user/kiosk/payment-success?orderId=${orderId}`,  // Include orderId
+        cancel_url: "https://example.com/cancel",
       });
   
-      res.json({ id: session.id });
+      // Return session ID to the frontend
+      res.json({ sessionId: session.id });
     } catch (error) {
-      console.error('Error creating Checkout Session:', error);
-      res.status(500).send('Internal Server Error');
+      console.error("Error creating Checkout Session:", error);
+      res.status(500).json({ error: "There was an error processing your payment. Please try again later." });
     }
-  }
+  };
+  
+  
+  
+  
 
 
 module.exports = { addToCart, getUserCart, validatePrescription, viewProductToCart, removeProductFromCart, integrateStripe };
