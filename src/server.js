@@ -29,6 +29,34 @@ app.get('/test-firebase', async (req, res) => {
 app.use('/admin/', MyAdminRoutes);
 app.use('/user/', MyUserRoutes);
 
+
+app.post('/save-fcm-token', async (req, res) => {
+    const { userId, token } = req.body;
+  
+    if (!userId || !token) {
+      return res.status(400).send({ error: 'User ID and token are required' });
+    }
+  
+    try {
+      const userRef = db.collection('users').doc(userId);
+      const userDoc = await userRef.get();
+  
+      let tokens = userDoc.exists ? userDoc.data().fcmTokens || [] : [];
+      
+      if (!tokens.includes(token)) {
+        tokens.push(token);
+      }
+  
+      await userRef.update({ fcmTokens: tokens });
+  
+      return res.status(200).send({ message: 'FCM Token saved successfully' });
+    } catch (error) {
+      console.error('Error saving FCM token:', error);
+      return res.status(500).send({ error: 'Failed to save FCM token' });
+    }
+});
+
+  
 app.listen((PORT),() => {
     console.log('Server is running at Port: ' + PORT);
 });

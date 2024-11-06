@@ -12,6 +12,15 @@ const addProduct = async (req, res) => {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
+    // Check if a product with the same name already exists
+    const existingProduct = await db.collection('products')
+      .where('name', '==', name)
+      .get();
+
+    if (!existingProduct.empty) {
+      return res.status(409).json({ message: 'Product with this name already exists' });
+    }
+
     let imageUrl = '';
 
     if (req.file) {
@@ -23,6 +32,8 @@ const addProduct = async (req, res) => {
       imageUrl = signedUrls[0];
     }
 
+    const productCategory = prescriptionNeeded === 'yes' ? 'Prescription Medication' : category;
+
     const newProduct = {
       name,
       price: parseFloat(price),
@@ -32,12 +43,14 @@ const addProduct = async (req, res) => {
       purposes: Array.isArray(purposes) ? purposes : [],
       dosages: Array.isArray(dosages) ? dosages : [],
       imageUrl: imageUrl,
-      category,
+      category: productCategory,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
     const addedProduct = await db.collection('products').add(newProduct);
-
+    const recipientToken = 'USER_FCM_TOKEN_HERE';  // Replace with actual token
+    await sendNotification('New Product Added', `${name} is now available in our store`, recipientToken);
+    
     res.status(201).json({
       message: 'Product added successfully',
       productId: addedProduct.id,
@@ -48,58 +61,9 @@ const addProduct = async (req, res) => {
   }
 };
 
+module.exports = { addProduct };
 
 
-/*
-// Transaction endpoint
-const processTransaction = async (req, res) => {
-  const { products, paymentMethod, discountCode } = req.body;
-
-  try {
-    // Fetch product data and update inventory
-    const transactionTotal = await processTransaction(products, discountCode);
-
-    // Save transaction to Firestore
-    const transactionRef = await db.collection("transactions").add({
-      products,
-      totalAmount: transactionTotal,
-      paymentMethod,
-      createdAt: new Date(),
-    });
-
-    res.status(200).json({ success: true, transactionId: transactionRef.id });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-async function processTransaction(products, discountCode) {
-  let totalAmount = 0;
-
-  for (const product of products) {
-    const productRef = db.collection("products").doc(product.id);
-    const productData = (await productRef.get()).data();
-    if (productData.stock < product.quantity) throw new Error("Insufficient stock");
-
-    await productRef.update({
-      stock: productData.stock - product.quantity,
-    });
-
-    totalAmount += productData.price * product.quantity;
-  }
-
-  if (discountCode) {
-    const discountRef = await db.collection("discounts").doc(discountCode).get();
-    if (discountRef.exists) {
-      const discount = discountRef.data();
-      totalAmount -= discount.discountValue;
-    }
-  }
-
-  return totalAmount;
-}
-
-*/
 
 
 module.exports = addProduct;

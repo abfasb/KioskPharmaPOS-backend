@@ -99,7 +99,6 @@ const validatePrescription = async (req, res) => {
     }
 
     try {
-        // Fetch product to check stock level
         const productRef = db.collection('products').doc(productId);
         const productDoc = await productRef.get();
 
@@ -116,16 +115,13 @@ const validatePrescription = async (req, res) => {
         const cartDoc = await cartRef.get();
         let items = cartDoc.exists ? cartDoc.data().items || [] : [];
 
-        // Check if the item is already in the cart
         const existingItemIndex = items.findIndex(
             (item) => item.productId === productId && item.dosage === dosage
         );
 
         if (existingItemIndex >= 0) {
-            // Increase quantity of existing item
             items[existingItemIndex].quantity += quantity;
         } else {
-            // Add as a new item
             items.push({
                 productId,
                 userId,
@@ -137,7 +133,6 @@ const validatePrescription = async (req, res) => {
             });
         }
 
-        // Update cart with the modified items array
         await cartRef.set({ items }, { merge: true });
 
         return res.status(201).send('Item added to cart successfully');
@@ -151,46 +146,35 @@ const validatePrescription = async (req, res) => {
 const removeProductFromCart = async (req, res) => {
     const { userId, productId } = req.body;
 
-    // Check for required fields
     if (!userId || !productId) {
         return res.status(400).send('Missing required fields');
     }
 
     try {
-        // Reference to the user's cart
         const userCartRef = db.collection('carts').doc(userId);
         const userCartDoc = await userCartRef.get();
 
-        // Check if cart exists
         if (!userCartDoc.exists) {
             return res.status(404).send('User cart not found');
         }
 
-        // Retrieve cart items
         const cartItems = userCartDoc.data().items || [];
-        // Find the item to remove
         const itemToRemove = cartItems.find(item => item.productId === productId);
 
-        // Check if item is in cart
         if (!itemToRemove) {
             return res.status(404).send('Item not found in cart');
         }
 
-        // Remove item from cart
         await userCartRef.update({
             items: admin.firestore.FieldValue.arrayRemove(itemToRemove)
         });
 
-        // Success response
         return res.status(200).send('Item removed from cart successfully');
     } catch (error) {
         console.error('Error removing item from cart:', error);
         return res.status(500).send('Internal Server Error');
     }
 };
-
-
-
 
 
 
@@ -205,7 +189,6 @@ const integrateStripe = async (req, res) => {
       if (totalAmount < 3000) {
         return res.status(400).json({ error: "The minimum order amount is PHP 30. Consider using cash instead. Thank you!" });
       }
-  
       const transactionData = {
         userId,
         orderId,
@@ -234,8 +217,11 @@ const integrateStripe = async (req, res) => {
         line_items: lineItems,
         mode: "payment",
         success_url: `http://localhost:5173/user/kiosk/payment-success?orderId=${orderId}`,
-        cancel_url: "https://example.com/cancel",
+        cancel_url: "https://google.com",
       });
+
+      const recipientToken = 'USER_FCM_TOKEN_HERE';  // Replace with actual token
+      await sendNotification('Payment Successful', 'Your order has been processed successfully.', recipientToken);
   
       res.json({ sessionId: session.id });
     } catch (error) {
@@ -244,9 +230,29 @@ const integrateStripe = async (req, res) => {
     }
   };
   
-  
-  
-  
 
+const sendNotification = async (req, res) => {
+    const { title, body, recipientToken } = req.body;
+  
+    if (!title || !body || !recipientToken) {
+      return res.status(400).json({ message: 'Title, body, and recipientToken are required.' });
+    }
+  
+    const message = {
+      notification: {
+        title: title,
+        body: body,
+      },
+      token: recipientToken,
+    };
+  
+    try {
+      const response = await admin.messaging().send(message);
+      res.status(200).json({ message: 'Notification sent successfully', response });
+    } catch (error) {
+      console.error('Error sending notification:', error);
+      res.status(500).json({ message: 'Failed to send notification', error });
+    }
+  }
 
-module.exports = { addToCart, getUserCart, validatePrescription, viewProductToCart, removeProductFromCart, integrateStripe };
+module.exports = { addToCart, getUserCart, validatePrescription, viewProductToCart, removeProductFromCart, integrateStripe, sendNotification };
