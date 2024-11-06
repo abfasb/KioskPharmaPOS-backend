@@ -220,8 +220,6 @@ const integrateStripe = async (req, res) => {
         cancel_url: "https://google.com",
       });
 
-      const recipientToken = 'USER_FCM_TOKEN_HERE';  // Replace with actual token
-      await sendNotification('Payment Successful', 'Your order has been processed successfully.', recipientToken);
   
       res.json({ sessionId: session.id });
     } catch (error) {
@@ -231,11 +229,13 @@ const integrateStripe = async (req, res) => {
   };
   
 
-const sendNotification = async (req, res) => {
+  const sendNotification = async (req, res) => {
     const { title, body, recipientToken } = req.body;
   
-    if (!title || !body || !recipientToken) {
-      return res.status(400).json({ message: 'Title, body, and recipientToken are required.' });
+    console.log("Received recipientToken:", recipientToken);
+  
+    if (!title || !body || !recipientToken || !Array.isArray(recipientToken)) {
+      return res.status(400).json({ message: 'Title, body, and an array of recipientToken(s) are required.' });
     }
   
     const message = {
@@ -243,16 +243,18 @@ const sendNotification = async (req, res) => {
         title: title,
         body: body,
       },
-      token: recipientToken,
+      tokens: recipientToken, 
     };
   
     try {
-      const response = await admin.messaging().send(message);
+      const response = await admin.messaging().sendMulticast(message);
       res.status(200).json({ message: 'Notification sent successfully', response });
     } catch (error) {
       console.error('Error sending notification:', error);
       res.status(500).json({ message: 'Failed to send notification', error });
     }
-  }
+  };
+  
+
 
 module.exports = { addToCart, getUserCart, validatePrescription, viewProductToCart, removeProductFromCart, integrateStripe, sendNotification };

@@ -6,6 +6,7 @@ const admin = require('../config/firebase');
 const MyAdminRoutes = require('../routes/MyAdminRoutes');
 const MyUserRoutes = require('../routes/MyUserRoutes');
 
+const db = admin.firestore();
 const PORT = 5000;
 
 app.use(express.json());
@@ -55,6 +56,40 @@ app.post('/save-fcm-token', async (req, res) => {
       return res.status(500).send({ error: 'Failed to save FCM token' });
     }
 });
+
+app.post('/save-fcm-token/admin', async (req, res) => {
+  const { email, token } = req.body;
+
+  if (!email || !token) {
+    return res.status(400).send({ error: 'Email and token are required' });
+  }
+
+  try {
+    const adminRef = db.collection('admin').doc(email);
+
+    // Get the admin document
+    const adminDoc = await adminRef.get();
+
+    // Check if the document exists and get the current tokens or initialize it
+    let tokens = adminDoc.exists ? adminDoc.data().fcmTokens || [] : [];
+
+    // Only add the token if it's not already present
+    if (!tokens.includes(token)) {
+      tokens.push(token);
+    }
+
+    // Update the fcmTokens field of the admin document
+    await adminRef.set({ fcmTokens: tokens }, { merge: true });
+
+    return res.status(200).send({ message: 'FCM Token saved successfully' });
+  } catch (error) {
+    console.error('Error saving FCM token:', error);
+    return res.status(500).send({ error: 'Failed to save FCM token' });
+  }
+});
+
+
+
 
   
 app.listen((PORT),() => {
