@@ -46,23 +46,22 @@ const addToCart = async (req, res) => {
     }
 };
 
-
 const getUserCart = async (req, res) => {
-    const { userId } = req.params;
-    
-    try {
-        const cartDoc = await db.collection("carts").doc(userId).get();
-        
-        if (!cartDoc.exists) {
-            return res.status(404).json({ success: false, message: "Cart not found" });
-        }
+  const { userId } = req.params;
 
-        const cartData = cartDoc.data();
-        return res.status(200).json({ success: true, products: cartData.items, userId: cartData.userId });
-    } catch (error) {
-        console.error("Error fetching cart:", error);
-        return res.status(500).json({ success: false, message: "Error fetching cart" });
+  try {
+    const cartDoc = await db.collection("carts").doc(userId).get();
+    
+    if (!cartDoc.exists) {
+      return res.status(404).json({ success: true, message: "Cart is empty", products: [] });
     }
+
+    const cartData = cartDoc.data();
+    return res.status(200).json({ success: true, products: cartData.items || [], userId: cartData.userId });
+  } catch (error) {
+    console.error("Error fetching cart:", error);
+    return res.status(500).json({ success: false, message: "Error fetching cart" });
+  }
 };
 
 
@@ -176,57 +175,56 @@ const removeProductFromCart = async (req, res) => {
     }
 };
 
-
-
 const integrateStripe = async (req, res) => {
-    try {
-      const { items, userId, paymentMethod, orderId, taxRate, discountAmount } = req.body;
-  
-      const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
-      const totalAfterDiscount = subtotal - discountAmount;
-      const totalAmount = (totalAfterDiscount + totalAfterDiscount * taxRate) * 100;
-  
-      if (totalAmount < 3000) {
-        return res.status(400).json({ error: "The minimum order amount is PHP 30. Consider using cash instead. Thank you!" });
-      }
-      const transactionData = {
-        userId,
-        orderId,
-        paymentMethod,
-        items,
-        taxRate,
-        discountAmount,
-        total: totalAmount / 100, 
-        timestamp: admin.firestore.Timestamp.now(),
-        checkoutStatus: "processing",
-      };
-  
-      await db.collection("transactions").doc(orderId).set(transactionData);
-  
-      const lineItems = items.map((item) => ({
-        price_data: {
-          currency: "php",
-          product_data: { name: item.name, description: item.description },
-          unit_amount: item.price * 100,
-        },
-        quantity: item.quantity,
-      }));
-  
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        line_items: lineItems,
-        mode: "payment",
-        success_url: `http://localhost:5173/user/kiosk/payment-success?orderId=${orderId}`,
-        cancel_url: "https://google.com",
-      });
+  try {
+    const { items, userId, paymentMethod, orderId, taxRate, discountAmount } = req.body;
 
-  
-      res.json({ sessionId: session.id });
-    } catch (error) {
-      console.error("Error creating Checkout Session:", error);
-      res.status(500).json({ error: "There was an error processing your payment. Please try again later." });
+    const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+
+    const totalAfterDiscount = subtotal - discountAmount;
+    const taxAmount = totalAfterDiscount * taxRate;
+    const finalTotalAmount = totalAfterDiscount + taxAmount;
+
+    if (finalTotalAmount < 30) {
+      return res.status(400).json({ error: "The minimum order amount is PHP 30. Consider using cash instead. Thank you!" });
     }
-  };
+
+    const transactionData = {
+      userId,
+      orderId,
+      paymentMethod,
+      items,
+      taxRate,
+      discountAmount,
+      total: finalTotalAmount,
+      timestamp: admin.firestore.Timestamp.now(),
+      checkoutStatus: "processing",
+    };
+
+    await db.collection("transactions").doc(orderId).set(transactionData);
+    const lineItems = items.map((item) => ({
+      price_data: {
+        currency: "php",
+        product_data: { name: item.name, description: item.description },
+        unit_amount: Math.round((item.price - (discountAmount / items.length) + taxAmount / items.length) * 100),
+      },
+      quantity: item.quantity,
+    }));
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: lineItems,
+      mode: "payment",
+      success_url: `http://localhost:5173/user/kiosk/payment-success?orderId=${orderId}`,
+      cancel_url: "https://google.com",
+    });
+    res.json({ sessionId: session.id });
+  } catch (error) {
+    console.error("Error creating Checkout Session:", error);
+    res.status(500).json({ error: "There was an error processing your payment. Please try again later." });
+  }
+};
+
 
   
 

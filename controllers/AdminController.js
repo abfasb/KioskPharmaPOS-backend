@@ -13,7 +13,6 @@ const addProduct = async (req, res) => {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    // Check if a product with the same name already exists
     const existingProduct = await db.collection('products')
       .where('name', '==', name)
       .get();
@@ -49,8 +48,6 @@ const addProduct = async (req, res) => {
     };
 
     const addedProduct = await db.collection('products').add(newProduct);
-    const recipientToken = 'USER_FCM_TOKEN_HERE';  // Replace with actual token
-    await sendNotification('New Product Added', `${name} is now available in our store`, recipientToken);
     
     res.status(201).json({
       message: 'Product added successfully',
