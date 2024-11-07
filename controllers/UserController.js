@@ -227,6 +227,7 @@ const integrateStripe = async (req, res) => {
       res.status(500).json({ error: "There was an error processing your payment. Please try again later." });
     }
   };
+
   
 
   const sendNotification = async (req, res) => {
