@@ -8,6 +8,7 @@ router.post("/create-payment-intent", UserController.integrateStripe);
 router.delete("/kiosk/cart/remove", UserController.removeProductFromCart);
 router.get("/kiosk/cart/:userId", UserController.getUserCart);
 router.get("/kiosk/validatePrescription", UserController.validatePrescription);
+
 router.post("/send-notification", UserController.sendNotification);
 
 module.exports = router;

@@ -89,35 +89,44 @@ const validatePrescription = async (req, res) => {
   };
   
   
-
   const viewProductToCart = async (req, res) => {
     const { productId, userId, imageUrl, name, price, quantity, dosage } = req.body;
 
-    if (!productId || !userId || !imageUrl || !name || !price || !quantity) {
-        return res.status(400).send('Missing required fields');
+    // Check for required fields and ensure quantity is a valid number
+    if (!productId || !userId || !imageUrl || !name || !price || !quantity || isNaN(quantity)) {
+        console.error('Missing or invalid required fields:', req.body);
+        return res.status(400).send('Missing or invalid required fields');
     }
 
     try {
+        // Reference to the product in Firestore
         const productRef = db.collection('products').doc(productId);
         const productDoc = await productRef.get();
 
         if (!productDoc.exists) {
+            console.error('Product not found:', productId);
             return res.status(404).send('Product not found');
         }
 
         const productData = productDoc.data();
+
+        // Check stock level
         if (productData.stockLevel <= 0) {
+            console.error('Product is out of stock:', productId);
             return res.status(400).send('Product is out of stock');
         }
 
+        // Reference to the user's cart in Firestore
         const cartRef = db.collection('carts').doc(userId);
         const cartDoc = await cartRef.get();
         let items = cartDoc.exists ? cartDoc.data().items || [] : [];
 
+        // Find if the item with the same dosage is already in the cart
         const existingItemIndex = items.findIndex(
             (item) => item.productId === productId && item.dosage === dosage
         );
 
+        // Update quantity if item exists, otherwise add new item
         if (existingItemIndex >= 0) {
             items[existingItemIndex].quantity += quantity;
         } else {
@@ -132,14 +141,22 @@ const validatePrescription = async (req, res) => {
             });
         }
 
+        // Save updated cart data to Firestore
         await cartRef.set({ items }, { merge: true });
 
+        // Decrement the product's stock level in Firestore
+        await productRef.update({
+            stockLevel: productData.stockLevel - quantity
+        });
+
+        console.log('Item added to cart successfully');
         return res.status(201).send('Item added to cart successfully');
     } catch (error) {
-        console.error('Error adding item to cart: ', error);
+        console.error('Error adding item to cart:', error);
         return res.status(500).send('Internal Server Error');
     }
 };
+
 
 
 const removeProductFromCart = async (req, res) => {
@@ -177,13 +194,10 @@ const removeProductFromCart = async (req, res) => {
 
 const integrateStripe = async (req, res) => {
   try {
-    const { items, userId, paymentMethod, orderId, taxRate, discountAmount } = req.body;
+    const { items, userId, paymentMethod, orderId, tax, discountAmount } = req.body;
 
     const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
-
-    const totalAfterDiscount = subtotal - discountAmount;
-    const taxAmount = totalAfterDiscount * taxRate;
-    const finalTotalAmount = totalAfterDiscount + taxAmount;
+    const finalTotalAmount = (subtotal - discountAmount) + tax ;
 
     if (finalTotalAmount < 30) {
       return res.status(400).json({ error: "The minimum order amount is PHP 30. Consider using cash instead. Thank you!" });
@@ -194,7 +208,7 @@ const integrateStripe = async (req, res) => {
       orderId,
       paymentMethod,
       items,
-      taxRate,
+      tax,
       discountAmount,
       total: finalTotalAmount,
       timestamp: admin.firestore.Timestamp.now(),
@@ -202,11 +216,12 @@ const integrateStripe = async (req, res) => {
     };
 
     await db.collection("transactions").doc(orderId).set(transactionData);
+
     const lineItems = items.map((item) => ({
       price_data: {
         currency: "php",
         product_data: { name: item.name, description: item.description },
-        unit_amount: Math.round((item.price - (discountAmount / items.length) + taxAmount / items.length) * 100),
+        unit_amount: Math.round(item.price * 100),
       },
       quantity: item.quantity,
     }));
@@ -218,13 +233,13 @@ const integrateStripe = async (req, res) => {
       success_url: `http://localhost:5173/user/kiosk/payment-success?orderId=${orderId}`,
       cancel_url: "https://google.com",
     });
+
     res.json({ sessionId: session.id });
   } catch (error) {
     console.error("Error creating Checkout Session:", error);
     res.status(500).json({ error: "There was an error processing your payment. Please try again later." });
   }
 };
-
 
   
 
