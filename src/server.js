@@ -41,7 +41,7 @@ app.post('/save-fcm-token', async (req, res) => {
   try {
     const userRef = db.collection('users').doc(userId);
     
-    await userRef.update({ fcmTokens: [token] });
+    await userRef.update({ fcmTokens: [token] }, { merge: true});
 
     return res.status(200).send({ message: 'FCM Token updated successfully' });
   } catch (error) {

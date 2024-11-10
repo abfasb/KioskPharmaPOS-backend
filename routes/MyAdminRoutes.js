@@ -4,37 +4,58 @@ const addProduct = require('../controllers/AdminController');
 const multer = require('multer');
 const admin = require('../config/firebase');
 
+const db = admin.firestore();
+
 const upload = multer({
     storage: multer.memoryStorage(),
   });
 
 router.post('/add-product', upload.single('image'), addProduct);
 
-
 router.post('/send-notification', async (req, res) => {
-  const { title, body, recipientToken } = req.body;
+  const { userId, title, message, orderId } = req.body;
 
-  if (!recipientToken) {
-    return res.status(400).json({ error: 'Recipient token is required' });
+  if (!userId) {
+    return res.status(400).json({ success: false, message: "User ID is required." });
   }
-
-  const message = {
-    notification: {
-      title,
-      body,
-    },
-    token: recipientToken,
-  };
 
   try {
-    const response = await admin.messaging().send(message);
-    console.log('Notification sent successfully:', response);
-    res.status(200).json({ message: 'Notification sent successfully', response });
+    // Fetch user's FCM tokens from Firestore
+    const userDoc = await db.collection('users').doc(userId).get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    const fcmTokens = userDoc.data().fcmTokens || [];
+
+    // Define notification payload
+    const payload = {
+      notification: {
+        title,
+        body: message,
+      },
+      data: {
+        orderId: String(orderId),
+      },
+    };
+
+    // Send notification using the updated FCM API
+    const response = await Promise.all(
+      fcmTokens.map(token => admin.messaging().send({
+        token,
+        ...payload
+      }))
+    );
+
+    console.log("Notification sent successfully:", response);
+    res.status(200).json({ success: true, message: "Notification sent successfully" });
   } catch (error) {
-    console.error('Error sending notification:', error);
-    res.status(500).json({ error: 'Error sending notification', details: error });
+    console.error("Error sending notification:", error);
+    res.status(500).json({ success: false, message: "Failed to send notification" });
   }
 });
+
 
 module.exports = router;
 
