@@ -11,4 +11,7 @@ router.get("/kiosk/validatePrescription", UserController.validatePrescription);
 
 router.post("/send-notification", UserController.sendNotification);
 
+
+router.post('/send-notification/order', UserController.sendOrderNotification);
+  
 module.exports = router;

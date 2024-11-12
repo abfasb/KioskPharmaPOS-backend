@@ -92,14 +92,12 @@ const validatePrescription = async (req, res) => {
   const viewProductToCart = async (req, res) => {
     const { productId, userId, imageUrl, name, price, quantity, dosage } = req.body;
 
-    // Check for required fields and ensure quantity is a valid number
     if (!productId || !userId || !imageUrl || !name || !price || !quantity || isNaN(quantity)) {
         console.error('Missing or invalid required fields:', req.body);
         return res.status(400).send('Missing or invalid required fields');
     }
 
     try {
-        // Reference to the product in Firestore
         const productRef = db.collection('products').doc(productId);
         const productDoc = await productRef.get();
 
@@ -110,23 +108,19 @@ const validatePrescription = async (req, res) => {
 
         const productData = productDoc.data();
 
-        // Check stock level
         if (productData.stockLevel <= 0) {
             console.error('Product is out of stock:', productId);
             return res.status(400).send('Product is out of stock');
         }
 
-        // Reference to the user's cart in Firestore
         const cartRef = db.collection('carts').doc(userId);
         const cartDoc = await cartRef.get();
         let items = cartDoc.exists ? cartDoc.data().items || [] : [];
 
-        // Find if the item with the same dosage is already in the cart
         const existingItemIndex = items.findIndex(
             (item) => item.productId === productId && item.dosage === dosage
         );
 
-        // Update quantity if item exists, otherwise add new item
         if (existingItemIndex >= 0) {
             items[existingItemIndex].quantity += quantity;
         } else {
@@ -141,10 +135,8 @@ const validatePrescription = async (req, res) => {
             });
         }
 
-        // Save updated cart data to Firestore
         await cartRef.set({ items }, { merge: true });
 
-        // Decrement the product's stock level in Firestore
         await productRef.update({
             stockLevel: productData.stockLevel - quantity
         });
@@ -269,6 +261,62 @@ const integrateStripe = async (req, res) => {
     }
   };
   
+const sendOrderNotification = async (req, res) => {
+  const { title, message, orderId } = req.body;
 
+  try {
+    const adminDoc = await db.collection('admin').doc('checachio@gmail.com').get(); 
 
-module.exports = { addToCart, getUserCart, validatePrescription, viewProductToCart, removeProductFromCart, integrateStripe, sendNotification };
+    if (!adminDoc.exists) {
+      return res.status(404).json({ success: false, message: "Admin document not found." });
+    }
+
+    const fcmTokens = adminDoc.data().fcmTokens || [];
+
+    if (fcmTokens.length === 0) {
+      console.warn("No FCM tokens found for admin.");
+      return res.status(404).json({ success: false, message: "No FCM tokens available for admin." });
+    }
+
+    const payload = {
+      notification: {
+        title,
+        body: message,
+      },
+      data: {
+        orderId: String(orderId),
+      },
+    };
+
+    // Send notifications to each FCM token and handle any potential errors
+    const response = await Promise.all(
+      fcmTokens.map(async (token) => {
+        try {
+          return await admin.messaging().send({
+            token,
+            ...payload,
+          });
+        } catch (error) {
+          console.error("Failed to send to token:", token, error);
+          return { error, token }; // Capture tokens that fail for cleanup or review
+        }
+      })
+    );
+
+    console.log("Notification responses:", response);
+
+    // Filter out failed tokens and log or remove as necessary
+    const failedTokens = response.filter((res) => res.error).map((res) => res.token);
+    if (failedTokens.length > 0) {
+      console.warn("Some tokens failed:", failedTokens);
+      // Optionally, remove failed tokens from your database if they are expired
+    }
+
+    res.status(200).json({ success: true, message: "Notifications processed.", failedTokens });
+  } catch (error) {
+    console.error("Error sending notification:", error);
+    res.status(500).json({ success: false, message: "Failed to send notifications" });
+  }
+}
+
+module.exports = { addToCart, getUserCart, validatePrescription, viewProductToCart, removeProductFromCart, integrateStripe, sendNotification, sendOrderNotification };
