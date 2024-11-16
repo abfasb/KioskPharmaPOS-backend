@@ -5,12 +5,27 @@ const { sendNotification } = require('./UserController');
 const db = admin.firestore();
 const bucket = admin.storage().bucket();
 
+
 const addProduct = async (req, res) => {
   try {
-    const { name, price, description, stockLevel, prescriptionNeeded, purposes, dosages, category } = req.body;
+    const { 
+      name, 
+      price, 
+      description, 
+      stockLevel, 
+      prescriptionNeeded, 
+      purposes = [], 
+      dosages = [], 
+      category, 
+      expirationDate 
+    } = req.body;
 
-    if (!name || !price || !description || !stockLevel || !prescriptionNeeded) {
+    if (!name || !price || !description || !stockLevel || !prescriptionNeeded || !expirationDate) {
       return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    if (isNaN(Date.parse(expirationDate))) {
+      return res.status(400).json({ message: 'Expiration date must be a valid date' });
     }
 
     const existingProduct = await db.collection('products')
@@ -28,7 +43,7 @@ const addProduct = async (req, res) => {
       await file.save(req.file.buffer, {
         metadata: { contentType: req.file.mimetype },
       });
-      const signedUrls = await file.getSignedUrl({ action: 'read', expires: '03-01-2500' }); 
+      const signedUrls = await file.getSignedUrl({ action: 'read', expires: '03-01-2500' });
       imageUrl = signedUrls[0];
     }
 
@@ -44,11 +59,12 @@ const addProduct = async (req, res) => {
       dosages: Array.isArray(dosages) ? dosages : [],
       imageUrl: imageUrl,
       category: productCategory,
+      expirationDate: new Date(expirationDate), 
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
     const addedProduct = await db.collection('products').add(newProduct);
-    
+
     res.status(201).json({
       message: 'Product added successfully',
       productId: addedProduct.id,
@@ -58,6 +74,7 @@ const addProduct = async (req, res) => {
     res.status(500).json({ message: 'Failed to add product', error });
   }
 };
+
 
 
 module.exports = { addProduct, sendNotification };

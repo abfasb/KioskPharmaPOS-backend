@@ -20,7 +20,6 @@ router.post('/send-notification', async (req, res) => {
   }
 
   try {
-    // Fetch user's FCM tokens from Firestore
     const userDoc = await db.collection('users').doc(userId).get();
 
     if (!userDoc.exists) {
@@ -29,7 +28,6 @@ router.post('/send-notification', async (req, res) => {
 
     const fcmTokens = userDoc.data().fcmTokens || [];
 
-    // Define notification payload
     const payload = {
       notification: {
         title,

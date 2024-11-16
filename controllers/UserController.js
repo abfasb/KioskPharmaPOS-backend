@@ -288,7 +288,6 @@ const sendOrderNotification = async (req, res) => {
       },
     };
 
-    // Send notifications to each FCM token and handle any potential errors
     const response = await Promise.all(
       fcmTokens.map(async (token) => {
         try {
@@ -298,7 +297,7 @@ const sendOrderNotification = async (req, res) => {
           });
         } catch (error) {
           console.error("Failed to send to token:", token, error);
-          return { error, token }; // Capture tokens that fail for cleanup or review
+          return { error, token };
         }
       })
     );
