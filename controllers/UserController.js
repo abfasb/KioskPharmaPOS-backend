@@ -70,16 +70,13 @@ const validatePrescription = async (req, res) => {
     const { text } = req.body;
   
     try {
-      // Assuming your products are stored in a collection called 'products'
       const productsRef = db.collection('products');
       const snapshot = await productsRef.where('name', '==', text).get();
   
       if (!snapshot.empty) {
-        // If there is a matching product, return success
         const productData = snapshot.docs[0].data();
         res.json({ success: true, message: 'Product is valid for prescription.', product: productData });
       } else {
-        // No matching product found
         res.json({ success: false, message: 'Product not found.' });
       }
     } catch (error) {

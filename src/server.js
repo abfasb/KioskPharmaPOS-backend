@@ -40,15 +40,24 @@ app.post('/save-fcm-token', async (req, res) => {
 
   try {
     const userRef = db.collection('users').doc(userId);
-    
-    await userRef.update({ fcmTokens: [token] }, { merge: true});
+    const userDoc = await userRef.get();
 
-    return res.status(200).send({ message: 'FCM Token updated successfully' });
+    if (!userDoc.exists) {
+      return res.status(404).send({ error: 'User not found' });
+    }
+
+    // Check if fcmTokens exists, and set it to the new token
+    await userRef.update({
+      fcmTokens: [token], // Initialize or replace with the new token
+    });
+
+    return res.status(200).send({ message: 'FCM Token replaced successfully' });
   } catch (error) {
     console.error('Error updating FCM token:', error);
     return res.status(500).send({ error: 'Failed to update FCM token' });
   }
 });
+
 
 app.post('/save-fcm-token/admin', async (req, res) => {
 const { email, token } = req.body;
