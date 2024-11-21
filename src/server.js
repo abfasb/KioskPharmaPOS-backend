@@ -46,9 +46,8 @@ app.post('/save-fcm-token', async (req, res) => {
       return res.status(404).send({ error: 'User not found' });
     }
 
-    // Check if fcmTokens exists, and set it to the new token
     await userRef.update({
-      fcmTokens: [token], // Initialize or replace with the new token
+      fcmTokens: [token],
     });
 
     return res.status(200).send({ message: 'FCM Token replaced successfully' });
@@ -79,10 +78,6 @@ try {
 });
 
 
-
-
-
-  
 app.listen((PORT),() => {
     console.log('Server is running at Port: ' + PORT);
 });

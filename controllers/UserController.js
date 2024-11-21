@@ -134,9 +134,6 @@ const validatePrescription = async (req, res) => {
 
         await cartRef.set({ items }, { merge: true });
 
-        await productRef.update({
-            stockLevel: productData.stockLevel - quantity
-        });
 
         console.log('Item added to cart successfully');
         return res.status(201).send('Item added to cart successfully');
@@ -145,8 +142,6 @@ const validatePrescription = async (req, res) => {
         return res.status(500).send('Internal Server Error');
     }
 };
-
-
 
 const removeProductFromCart = async (req, res) => {
     const { userId, productId } = req.body;
