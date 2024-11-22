@@ -199,8 +199,14 @@ const integrateStripe = async (req, res) => {
       checkoutStatus: "processing",
     };
 
-    await db.collection("transactions").doc(orderId).set(transactionData);
-
+    await db.collection("transactions").doc(orderId).set({
+      ...transactionData,
+      items: items.map((item) => ({
+        ...item,
+        dosage: item.description,
+      })),
+    });
+    
     const lineItems = items.map((item) => ({
       price_data: {
         currency: "php",
