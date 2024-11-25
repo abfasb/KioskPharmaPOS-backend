@@ -176,12 +176,13 @@ const removeProductFromCart = async (req, res) => {
     }
 };
 
+
 const integrateStripe = async (req, res) => {
   try {
-    const { items, userId, paymentMethod, orderId, tax, discountAmount } = req.body;
+    const { items, userId, paymentMethod, orderId, tax, discountAmount, subTotal } = req.body;
 
-    const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
-    const finalTotalAmount = (subtotal - discountAmount) + tax ;
+    const finalTotalAmount = subTotal + tax - discountAmount; 
+    const calculatedTax = tax - discountAmount;
 
     if (finalTotalAmount < 30) {
       return res.status(400).json({ error: "The minimum order amount is PHP 30. Consider using cash instead. Thank you!" });
@@ -194,6 +195,7 @@ const integrateStripe = async (req, res) => {
       items,
       tax,
       discountAmount,
+      subTotal,
       total: finalTotalAmount,
       timestamp: admin.firestore.Timestamp.now(),
       checkoutStatus: "processing",
@@ -206,15 +208,32 @@ const integrateStripe = async (req, res) => {
         dosage: item.description,
       })),
     });
-    
+
     const lineItems = items.map((item) => ({
       price_data: {
         currency: "php",
-        product_data: { name: item.name, description: item.description },
+        product_data: {
+          name: item.name,
+          description: item.description,
+        },
         unit_amount: Math.round(item.price * 100),
       },
       quantity: item.quantity,
     }));
+
+    if (calculatedTax > 0) {
+      lineItems.push({
+        price_data: {
+          currency: "php",
+          product_data: {
+            name: "Tax",
+            description: "Calculated Tax with Discount",
+          },
+          unit_amount: Math.round(calculatedTax * 100),
+        },
+        quantity: 1,
+      });
+    }
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -230,6 +249,7 @@ const integrateStripe = async (req, res) => {
     res.status(500).json({ error: "There was an error processing your payment. Please try again later." });
   }
 };
+
 
   
 
