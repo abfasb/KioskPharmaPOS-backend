@@ -293,56 +293,46 @@ const integrateStripe = async (req, res) => {
       res.status(500).json({ message: 'Failed to send notification', error });
     }
   };
+
   const sendOrderNotification = async (req, res) => {
-    const { title, message, orderId, userId } = req.body;
+    const { title, message, orderId, userId, fcmTokens } = req.body;
+  
+    // Validate the request body
+    if (!userId || !orderId || !fcmTokens || fcmTokens.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing userId, orderId, or FCM tokens in request body.",
+      });
+    }
   
     try {
-      const adminDoc = await db.collection('admin').doc('checachio@gmail.com').get();
-      if (!adminDoc.exists) {
-        return res.status(404).json({ success: false, message: "Admin document not found." });
-      }
-      const fcmTokens = adminDoc.data().fcmTokens || [];
-  
-      if (fcmTokens.length === 0) {
-        console.warn("No FCM tokens found for admin.");
-        return res.status(404).json({ success: false, message: "No FCM tokens available for admin." });
-      }
-  
       const payload = {
-        notification: {
-          title,
-          body: message,
-        },
-        data: {
-          orderId: String(orderId),
-        },
+        notification: { title, body: message },
+        data: { orderId: String(orderId) },
       };
   
+      // Send notifications to admin FCM tokens
       const adminResponse = await Promise.all(
-        fcmTokens.map(async (token) => {
-          try {
-            return await admin.messaging().send({
-              token,
-              ...payload,
-            });
-          } catch (error) {
-            console.error("Failed to send to token:", token, error);
-            return { error, token };
-          }
-        })
+        fcmTokens.map((token) =>
+          admin.messaging().send({ token, ...payload }).catch((error) => ({
+            error,
+            token,
+          }))
+        )
       );
   
       const failedTokens = adminResponse.filter((res) => res.error).map((res) => res.token);
+  
       if (failedTokens.length > 0) {
-        console.warn("Some tokens failed:", failedTokens);
+        console.warn("Some admin tokens failed:", failedTokens);
       }
   
-      const userDoc = await db.collection('users').doc(userId).get();
+      const userDoc = await db.collection("users").doc(userId).get();
       if (!userDoc.exists) {
         return res.status(404).json({ success: false, message: "User document not found." });
       }
-      const userFCMToken = userDoc.data().fcmToken;
   
+      const userFCMToken = userDoc.data().fcmToken;
       if (userFCMToken) {
         await admin.messaging().send({
           token: userFCMToken,
@@ -350,9 +340,7 @@ const integrateStripe = async (req, res) => {
             title: "Order Cancelled",
             body: `Your order #${orderId} has been cancelled.`,
           },
-          data: {
-            orderId: String(orderId),
-          },
+          data: { orderId: String(orderId) },
         });
       }
   
@@ -362,6 +350,8 @@ const integrateStripe = async (req, res) => {
       res.status(500).json({ success: false, message: "Failed to send notifications" });
     }
   };
+  
+
   
 
 module.exports = { addToCart, getUserCart, validatePrescription, viewProductToCart, removeProductFromCart, integrateStripe, sendNotification, sendOrderNotification };
