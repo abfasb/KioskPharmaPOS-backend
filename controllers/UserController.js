@@ -176,17 +176,34 @@ const removeProductFromCart = async (req, res) => {
     }
 };
 
+const displayFormattedTimestamp = (firestoreTimestamp) => {
+  const date = firestoreTimestamp.toDate();
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+      dateStyle: 'long',
+      timeStyle: 'medium',
+      timeZone: 'Asia/Manila'
+  });
+
+  return formatter.format(date);
+};
+
+const timeRightNow = async () => {
+  const timestamp = admin.firestore.Timestamp.now();
+  return formattedTimestamp = displayFormattedTimestamp(timestamp);
+};
 
 const integrateStripe = async (req, res) => {
   try {
     const { items, userId, paymentMethod, orderId, tax, discountAmount, subTotal } = req.body;
-
+    
     const finalTotalAmount = subTotal + tax - discountAmount; 
     const calculatedTax = tax - discountAmount;
 
     if (finalTotalAmount < 30) {
       return res.status(400).json({ error: "The minimum order amount is PHP 30. Consider using cash instead. Thank you!" });
     }
+
+    const timeNow = await timeRightNow();
 
     const transactionData = {
       userId,
@@ -197,7 +214,7 @@ const integrateStripe = async (req, res) => {
       discountAmount,
       subTotal,
       total: finalTotalAmount,
-      timestamp: admin.firestore.Timestamp.now(),
+      timestamp: timeNow,
       checkoutStatus: "processing",
     };
 
@@ -251,8 +268,6 @@ const integrateStripe = async (req, res) => {
 };
 
 
-  
-
   const sendNotification = async (req, res) => {
     const { title, body, recipientToken } = req.body;
   
@@ -278,62 +293,75 @@ const integrateStripe = async (req, res) => {
       res.status(500).json({ message: 'Failed to send notification', error });
     }
   };
+  const sendOrderNotification = async (req, res) => {
+    const { title, message, orderId, userId } = req.body;
   
-const sendOrderNotification = async (req, res) => {
-  const { title, message, orderId } = req.body;
-
-  try {
-    const adminDoc = await db.collection('admin').doc('checachio@gmail.com').get(); 
-
-    if (!adminDoc.exists) {
-      return res.status(404).json({ success: false, message: "Admin document not found." });
+    try {
+      const adminDoc = await db.collection('admin').doc('checachio@gmail.com').get();
+      if (!adminDoc.exists) {
+        return res.status(404).json({ success: false, message: "Admin document not found." });
+      }
+      const fcmTokens = adminDoc.data().fcmTokens || [];
+  
+      if (fcmTokens.length === 0) {
+        console.warn("No FCM tokens found for admin.");
+        return res.status(404).json({ success: false, message: "No FCM tokens available for admin." });
+      }
+  
+      const payload = {
+        notification: {
+          title,
+          body: message,
+        },
+        data: {
+          orderId: String(orderId),
+        },
+      };
+  
+      const adminResponse = await Promise.all(
+        fcmTokens.map(async (token) => {
+          try {
+            return await admin.messaging().send({
+              token,
+              ...payload,
+            });
+          } catch (error) {
+            console.error("Failed to send to token:", token, error);
+            return { error, token };
+          }
+        })
+      );
+  
+      const failedTokens = adminResponse.filter((res) => res.error).map((res) => res.token);
+      if (failedTokens.length > 0) {
+        console.warn("Some tokens failed:", failedTokens);
+      }
+  
+      const userDoc = await db.collection('users').doc(userId).get();
+      if (!userDoc.exists) {
+        return res.status(404).json({ success: false, message: "User document not found." });
+      }
+      const userFCMToken = userDoc.data().fcmToken;
+  
+      if (userFCMToken) {
+        await admin.messaging().send({
+          token: userFCMToken,
+          notification: {
+            title: "Order Cancelled",
+            body: `Your order #${orderId} has been cancelled.`,
+          },
+          data: {
+            orderId: String(orderId),
+          },
+        });
+      }
+  
+      res.status(200).json({ success: true, message: "Notifications processed.", failedTokens });
+    } catch (error) {
+      console.error("Error sending notification:", error);
+      res.status(500).json({ success: false, message: "Failed to send notifications" });
     }
-
-    const fcmTokens = adminDoc.data().fcmTokens || [];
-
-    if (fcmTokens.length === 0) {
-      console.warn("No FCM tokens found for admin.");
-      return res.status(404).json({ success: false, message: "No FCM tokens available for admin." });
-    }
-
-    const payload = {
-      notification: {
-        title,
-        body: message,
-      },
-      data: {
-        orderId: String(orderId),
-      },
-    };
-
-    const response = await Promise.all(
-      fcmTokens.map(async (token) => {
-        try {
-          return await admin.messaging().send({
-            token,
-            ...payload,
-          });
-        } catch (error) {
-          console.error("Failed to send to token:", token, error);
-          return { error, token };
-        }
-      })
-    );
-
-    console.log("Notification responses:", response);
-
-    // Filter out failed tokens and log or remove as necessary
-    const failedTokens = response.filter((res) => res.error).map((res) => res.token);
-    if (failedTokens.length > 0) {
-      console.warn("Some tokens failed:", failedTokens);
-      // Optionally, remove failed tokens from your database if they are expired
-    }
-
-    res.status(200).json({ success: true, message: "Notifications processed.", failedTokens });
-  } catch (error) {
-    console.error("Error sending notification:", error);
-    res.status(500).json({ success: false, message: "Failed to send notifications" });
-  }
-}
+  };
+  
 
 module.exports = { addToCart, getUserCart, validatePrescription, viewProductToCart, removeProductFromCart, integrateStripe, sendNotification, sendOrderNotification };

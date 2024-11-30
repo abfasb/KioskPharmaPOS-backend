@@ -12,6 +12,7 @@ const upload = multer({
 
 router.post('/add-product', upload.single('image'), addProduct);
 
+
 router.post('/send-notification', async (req, res) => {
   const { userId, title, message, orderId } = req.body;
 
@@ -38,7 +39,6 @@ router.post('/send-notification', async (req, res) => {
       },
     };
 
-    // Send notification using the updated FCM API
     const response = await Promise.all(
       fcmTokens.map(token => admin.messaging().send({
         token,
