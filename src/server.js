@@ -78,6 +78,36 @@ try {
 });
 
 
+app.get('/get-collection', async (req, res) => {
+  const schema = [];
+
+  const collections = await db.listCollections();
+  for (const collection of collections) {
+      const collectionData = { name: collection.id, attributes: [], subcollections: [], items: [] };
+
+      const snapshot = await collection.limit(1).get();
+      snapshot.forEach(doc => {
+          const fields = doc.data();
+          for (const [key, value] of Object.entries(fields)) {
+              collectionData.attributes.push({ name: key, type: typeof value });
+              if (key === 'items') { 
+                  collectionData.items.push(value);
+              }
+          }
+      });
+
+      const subcollections = await db.collection(collection.id).doc().listCollections();
+      collectionData.subcollections = subcollections.map(sub => sub.id);
+
+      schema.push(collectionData);
+  }
+
+  res.json(schema);
+});
+
+
+
+
 app.listen((PORT),() => {
     console.log('Server is running at Port: ' + PORT);
 });
